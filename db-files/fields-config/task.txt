@@ -1,0 +1,1 @@
+{"name":{"allowNull":false,"unique":false},"description":{"allowNull":true,"unique":false},"date":{"allowNull":false,"unique":false}}
