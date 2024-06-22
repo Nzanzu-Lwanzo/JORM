@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JORM Database</title>
+
+    <link rel="stylesheet" href="./style.css">
+    <script src="./elements.js" type="module" defer></script>
+    <script  src="./utilities.js" type="module" defer></script>
+    <script src="./script.js" type="module" defer></script>
+    <script src="./api-requests.js" type="module" defer></script>
+</head>
+<body>
+
+    <div class="container">
+
+        <div class="topbar">
+            <h1>JORM Todo-App</h1>
+            <ul>
+                <li>
+                    <button id="toggle-form">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-plus"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
+                </li>
+
+                <li>
+                    <button class="no-bg" id="delete-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-trash"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
+                </li>
+
+                <li>
+                    <span id="task-counter">0</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="content">
+           
+        </div>
+
+
+        <form action="#" id="form" class="form">
+            <div>
+                <button class="hide">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+
+            <h2>Add</h2>
+            <input type="text" name="name" placeholder="Task name ...">
+            <textarea name="description" placeholder="Task description ..."></textarea>
+            <input type="date" name="date">
+            <button type="submit" id="submit">New Task</button>
+        </form>
+    </div>
+
+
+    <form action="#" class="update-form" id="update-form">
+        <div>
+            <button id="hide-update-form">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+
+        <div class="inputs">
+            <h2>Update</h2>
+            <input type="text" name="name" placeholder="Task name ...">
+            <textarea name="description" placeholder="Task description ..."></textarea>
+            <input type="date" name="date">
+            <button type="submit" id="updater">Update</button>
+        </div>
+    </form>
+    
+</body>
+</html>

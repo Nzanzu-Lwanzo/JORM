@@ -1,0 +1,316 @@
+:root {
+    --card-bg : #FFF;
+    --body-bg : #EEE;
+    --color : #333;
+
+    --spiner-border-width : 2px;
+    --spiner-dims : 20px;
+    --spinner-track-color: #000;
+    --spinner-ring-color : #1360d3;
+}
+
+/* LOADER */
+
+.loader {
+    border: var(--spiner-border-width) solid var(--spinner-ring-color);
+    border-top: var(--spiner-border-width) solid var(--spinner-track-color);
+    border-radius: 50%;
+    width: var(--spiner-dims);
+    height: var(--spiner-dims);
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ****** */
+
+
+* {
+    padding: 0;margin: 0;
+    border: none;outline: none;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    box-sizing: border-box;
+    list-style-type: none;
+}
+
+*:not(svg) {
+    transition: all .4s ease-out;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+    background-color: var(--body-bg);
+}
+
+.container {
+    width: 40%;
+    height: 70%;
+    border-radius: 4px;
+    background: var(--card-bg);
+    position: relative;
+    overflow: hidden;
+
+    display: grid;
+    grid-template-rows: 10% 90%;
+
+}
+
+.topbar {
+    width: 100%;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .8rem 1rem;
+    background-color: var(--card-bg);
+}
+
+.topbar ul {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+.topbar ul button,
+#task-counter {
+    height: 30px;
+    width: 30px;
+    border-radius: 50%;
+    background-color: #181717;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    cursor: pointer;
+    color: var(--card-bg);
+}
+
+.topbar ul button svg {
+    height: 20px;
+}
+
+.topbar ul button.no-bg {
+    background-color: transparent;
+}
+
+.topbar ul button svg {
+    stroke: var(--card-bg);
+}
+
+.topbar ul button.no-bg svg {
+    stroke: var(--color);
+}
+
+.topbar ul button:hover {
+    background-color: #000;
+}
+
+.topbar ul button.no-bg:hover {
+    background-color: var(--body-bg);
+}
+
+.form {
+    position: absolute;
+    width: 100%;
+    background-color: var(--color);
+    padding: 1rem;
+    height: 100%;
+
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 1rem;
+    color: var(--card-bg);
+
+    transform: translateY(100%);
+}
+
+.update-form input,
+.update-form textarea,
+.form input,
+.form textarea {
+    padding: 1rem;
+    border-radius: 4px;
+}
+
+.form input,
+.update-form input {
+    height: 40px;
+}
+
+.form textarea,
+.update-form textarea {
+    height: 100px;
+    resize: none;
+}
+
+.form button,
+.update-form button {
+    height: 40px;
+    background-color: #000;
+    color: var(--body-bg);
+    border-radius: 4px;
+    cursor:pointer;
+}
+
+.form button,
+.update-form button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.form button:hover,
+.form button:active, 
+.form button:focus,
+.update-form button:hover,
+.update-form button:active,
+.update-form button:focus {
+    background-color: #181717; 
+}
+
+.form.shown {
+    transform: none;
+}
+
+.form .hide {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.update-form {
+    position: fixed;
+    height: 100vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0,0,0,.4);
+
+    opacity: 0;
+    pointer-events: none;
+}
+
+.update-form-shown {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.update-form .inputs {
+    width: 40%;
+    height: 70%;
+    background-color: var(--color);
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.update-form .inputs h2 {color: var(--card-bg);}
+
+.update-form .inputs input,
+.update-form .inputs textarea {
+    border: 1px solid var(--card-bg) !important;
+}
+
+.update-form #hide-update-form {
+    position: absolute;
+    top: 1rem;right: 1rem;
+    background: var(--color);
+    height: 30px;
+    width: 30px;
+    border-radius: 50%;
+    
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.update-form #hide-update-form svg {
+    stroke: var(--card-bg);
+}
+
+.container .content {
+    overflow: auto;    
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 1rem;
+    width: 100%;
+}
+
+.container .content .task {
+    padding: .5rem;
+    border-radius: 4px;
+    border: 1px solid var(--color);
+}
+
+.container .content .task span.date {display: inline-block;}
+
+.container .content .task p,
+.container .content .task span.date {
+    font-size: .9rem;
+}
+
+
+.container .content .task .actions {
+    padding: .5rem 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: .5rem;
+}
+
+.container .content .task .actions svg {
+    height: 18px;
+}
+
+.container .content .task .actions button {
+    background-color: var(--body-bg);
+    height: 30px;
+    min-width: 30px;
+    font-size: .8rem;
+    padding: .2rem .3rem;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.container .content .task .actions button:hover {
+    background: var(--color);
+    color: var(--card-bg);
+}
+
+.container .content .task .actions button:hover svg {
+    stroke: var(--card-bg);
+}
