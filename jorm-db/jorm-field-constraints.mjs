@@ -1,7 +1,11 @@
+import validator from "validator";
 import { FieldRestrictionError, ModelTypeError } from "./jorm-errors.mjs";
+
 import {
     ENUMValuesAreSameType
 } from "./jorm-utils.mjs";
+
+import {default as checkFieldConfig, validateField} from "./jorm-field-config-checks.mjs";
 
 
 export default class JORMFieldConstraint {
@@ -62,9 +66,36 @@ export default class JORMFieldConstraint {
             throw new ModelTypeError("[ min ] should be an integer.")
         }
 
+        /*** DATE */
+        if(
+            this.dateIsAfter
+            && 
+                (
+                    !validator.isDate(this.dateIsAfter)
+                    &&
+                    !this.dateIsAfter instanceof Date
+                )
+        
+        ) {
+            throw new ModelTypeError("[ date.isAfter ] should be a valid date string.")
+        } 
+
+        if (
+            this.dateIsBefore
+            && 
+                (
+                    !validator.isDate(this.dateIsBefore)
+                    &&
+                    !this.dateIsBefore instanceof Date
+                )
+        
+        ) {
+            throw new ModelTypeError("[ date.isBefore ] should be a valid date string.")
+        }
 
         return true;
     }
+
 
     /**
      * 
@@ -99,6 +130,10 @@ export default class JORMFieldConstraint {
      * @param {number} options.array.maxLength
      * @param {number} options.array.minLength
      * 
+     * @param {object} options.date
+     * @param {string} options.date.isAfter
+     * @param {string} options.date.isBefore
+     * 
      * 
      * Builds a field constraint object for a JORM model.
      */
@@ -131,6 +166,10 @@ export default class JORMFieldConstraint {
         array : {
             minLength : undefined,
             maxLength : undefined
+        },
+        date : {
+            isAfter : undefined,
+            isBefore : undefined
         }
     }) {
 
@@ -154,8 +193,12 @@ export default class JORMFieldConstraint {
         this.numberMin = options?.number?.min;
         this.numberMax = options?.number?.max;
 
-        this.arrayMaxLength = options?.array?.maxLength
+        this.arrayMaxLength = options?.array?.maxLength;
         this.arrayMinLength = options?.array?.minLength;
+
+        this.dateIsAfter = options?.date?.isAfter;
+        this.dateIsBefore = options?.date?.isBefore;
+
     }
 
     __class__() {
@@ -166,8 +209,16 @@ export default class JORMFieldConstraint {
      * Returns the constraints object for them to be writtent to the config file.
      */
     get constraints () {
-        let ok = this.#validateInstance();
-        if(!ok) throw new ModelTypeError("Check the data type you provided for your constraints options.")
+        let configOk = this.#validateInstance();
+        let defaultValueOk = validateField({
+            data:this.defaultValue,
+            field : "A field with default",
+            config: this.options
+        });
+
+        if(!configOk && !defaultValueOk) {
+            throw new ModelTypeError("Check the data type you provided for your constraints options.")
+        }
         return this.options;
     }
 

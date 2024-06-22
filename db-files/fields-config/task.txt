@@ -1,1 +1,1 @@
-{"name":{"allowNull":false,"unique":false},"description":{"allowNull":true,"unique":false},"date":{"allowNull":false,"unique":false}}
+{"name":{"allowNull":false,"string":{"maxLength":50},"unique":false},"description":{"allowNull":true,"defaultValue":"There's no description for this task !","unique":false},"date":{"allowNull":false,"date":{"isAfter":"2024-06-22T17:43:09.764Z"},"unique":false}}

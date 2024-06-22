@@ -3,18 +3,26 @@
   "version": "0.0.0",
   "description": "JORM is a Database Management System written in vanilla Javascript. Its aim is to provide a relational database model that uses .json files as tables. Though, it's severely risky to use it in production with regard to security concerns. Thus, use JORM in developpement, for testing, learning, purposes or ... for fun.",
   "main": "index.js",
-  "type" : "module",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "migrate" : "node ./test-app/model.mjs",
-    "dev" : "nodemon ./index.mjs",
-    "start" : "node ./index.mjs"
+    "migrate": "node ./test-app/models-init.mjs",
+    "dev": "nodemon ./index.mjs",
+    "start": "node ./index.mjs"
   },
-  "keywords": ["jorm","database","lightweight"],
+  "keywords": [
+    "jorm",
+    "database",
+    "lightweight"
+  ],
   "author": "NZANZU MUHAYRWA L.",
   "license": "ISC",
   "dependencies": {
     "dotenv": "^16.4.5",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "validator": "^13.12.0"
+  },
+  "devDependencies": {
+    "@types/validator": "^13.12.0"
   }
 }

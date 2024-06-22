@@ -1,12 +1,10 @@
 import {
     writeFile,
     readFile,
-    mkdir,
-    appendFile,
     unlink
 } from "node:fs/promises";
 
-import { existsSync, statSync, write } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 
 import { 
     BadFilePathError,
@@ -20,18 +18,20 @@ import {
 } from "node:path";
 
 import {
-    gotSameProperties,
     getShape,
     getConfig,
     createStorageDir,
     storeToDir,
-    validateMail,
-    validateURL
+    buildRecord
 } from "./jorm-utils.mjs";
 
-import { TYPES_MAP, DIARY_CONFIG } from "./jorm-constants.mjs";
+import { DIARY_CONFIG } from "./jorm-constants.mjs";
 
 import DataProcessor from "./jorm-data-processor.mjs";
+
+import checkFieldConfig from "./jorm-field-config-checks.mjs";
+
+import checkFieldType from "./jorm-field-types-checks.mjs";
 
 export default class JORM {
 
@@ -102,260 +102,9 @@ export default class JORM {
      * confront it to the new data and makes sure that the property and their initial types match.
      * 
      */
-    #checkTypes = async (newData) => {
+    #checkTypes = async (newData) => await checkFieldType({instance:this,newData})
 
-        const fileContent = await readFile(this.typesFilePath,{encoding:"binary"});
-
-        /**@type {object} */
-        const parsedFileContent = JSON.parse(fileContent || "{}");
-
-        /***
-         * CHECK 
-         * 
-         * 1. That the properties are the same.
-         * 2. That the types registered are the same as the ones provided.
-         */
-
-        const ndKeys = Object.keys(newData);
-        const pfKeys = Object.keys(parsedFileContent);
-
-        // Perform some checks only if [ this.coercicion ] option is set to true
-        if(this.coercicion) {
-
-            // Chech if the properties (keys) list have got the same length ***********
-
-            if((ndKeys.length !== pfKeys.length)) {
-                const error = new ModelTypeError("You provided more or less properties in this new record than you specified when creating the table [ Json File ].");
-
-                throw error;
-            }
-
-            // ***********************************************************************
-
-            // Check if the types are respected *****************************
-
-            let typesRespected = ndKeys.every( key => {
-
-                /**** For each key in the new data object */
-
-                // 1. Get the type code related to this property name
-                let typeCode = parsedFileContent[key];
-
-                /**** The data can be undefined ( in the examples where the field allow null value) */
-                let data = newData[key] || undefined;
-
-                let fromNdType = typeof data;
-
-                let fromMapType = typeof TYPES_MAP[typeCode];
-                let v = (fromNdType === fromMapType) || fromNdType == "undefined";
-                
-                return v;
-
-            })
-
-            if(!typesRespected) {
-                throw new ModelTypeError(`You didn't respect the type restriction. -> ${fileContent} or mispelled one field name [${pfKeys.join(" , ")}]`);
-            } 
-
-            // *******************************************************************
-        }
-
-        // Check if the properties have the same name
-        if(!gotSameProperties({ob1:newData,ob2:parsedFileContent})) {
-            throw new ModelTypeError("You did not provide the same properties names as specified when creating the table [ Json File ].");
-        }
-
-        // Types don't match with the ones provided when creating the table [ Json File ].
-        return true;
-
-    }
-
-
-    #checkConfig = async (newData) => {
-        
-        const fileContent = await readFile(this.configFilePath,{encoding:"binary"});
-
-        /**@type {object} */
-        const parsedFileContent = JSON.parse(fileContent || "{}");
-
-        const ndKeys = Object.keys(newData);
-        const pfKeys = Object.keys(parsedFileContent);
-
-        let configValid = ndKeys.every( async key => {
-
-            const data = newData[key];
-            const config = parsedFileContent[key];
-
-            let allowNull = config?.allowNull;
-            let defaultValue = config?.defaultValue;
-            let unique = config?.unique;
-
-            let stringMaxLength = config?.string?.maxLength;
-            let stringMinLength = config?.string?.minLength;
-            let isMail = config?.string?.isMail;
-            let isURL = config?.string?.isURL;
-            /**@type {Array} */
-            let string_in = config?.string?.in;
-            /**@type {Array} */
-            let string_none = config?.string?.none;
-            let startsWith = config?.string?.startsWith;
-            let endsWith = config?.string?.endsWith;
-            let contains = config?.string?.contains;
-            let iCase = config?.string?.iCase;
-
-            let numberMin = config?.number?.min;
-            let numberMax = config?.number?.max;
-            let gt = config?.number?.gt;
-            let lt = config?.number?.lt;
-            let gte = config?.number?.gte;
-            let lte = config?.number?.lte;
-
-            let arrayMaxLength = config?.array?.maxLength;
-            let arrayMinLength = config?.array?.minLength;
-
-            /**** VALIDATE NON NULL VALUES */
-            if(!allowNull && !data && !key==="boolean") {
-                throw new FieldRestrictionError(`You must provide a value for the ${key} field.`)
-            }
-
-            /*** VALIDATE UNIQUE VALUES */
-            if(unique) {
-
-                /**@type {Array} */
-                const allRecords = await this.fetchAll();
-
-                /*** UNIQUE STRINGS */
-                if(typeof data === "string") {
-                    let isDuplicate = allRecords.some( record => {
-                        
-                        /**@type {string} */
-                        let inDtbs = record[key];
-
-                        /**@type {string} */
-                        let inNew = newData[key];
-
-                        return inDtbs?.trim().toLowerCase() === inNew?.trim().toLowerCase();
-                    })
-
-                    if(isDuplicate) {
-                        throw new FieldRestrictionError(`[ ${key} ] value must be unique.`)
-                    }
-                }
-
-                /*** UNIQUE ARRAYS */
-
-                if(typeof data === "object" && Array.isArray(data)) {
-                    
-                }
-            }
-
-            /**** VALIDATE STRING LENGTH */
-            if(typeof data === "string") {
-
-                if((stringMaxLength && data.length > stringMaxLength)) {
-                    throw new FieldRestrictionError(`[ ${key} ] value should have ${stringMaxLength} max length.`)
-                }
-
-                else if((stringMinLength && data.length < stringMinLength)) {
-                    throw new FieldRestrictionError(`[ ${key} ] value should have ${ stringMinLength } min length.`)
-                }
-
-                else if( string_in && !string_in.includes(data)) {
-                    throw new FieldRestrictionError(`[ ${key} ] value should be one of [${string_in.join(" , ")}].`)
-                }
-                
-                else if (string_none && string_none.includes(data)) {
-                    throw new FieldRestrictionError(`[ ${key} ] value should not be one of [${string_in.join(" , ")}].`)
-                }
-
-                else if (
-                    startsWith && !data
-                                    .toLowerCase()
-                                    .startsWith(startsWith.toLowerCase())
-                ) {
-                    throw new FieldRestrictionError(`[ ${key} ] value should should start with [${startsWith}].`)
-                }
-
-                else if( 
-                    endsWith && !data
-                                    .toLowerCase()
-                                    .endsWith(endsWith.toLowerCase())
-                ) {
-                    throw new FieldRestrictionError(`[ ${key} ] value should should end with [${endsWith}].`)
-                } 
-                
-                else if(
-                    contains && !data
-                                    .toLowerCase()                    
-                                    .includes(contains.toLowerCase())
-                ) {
-                    throw new FieldRestrictionError(`[ ${key} ] value should contain [${contains}].`)
-                }
-                else { null }
-
-            }
-
-            /**** VALIDATE STRING TYPES */
-            if(typeof data === "string") {
-                if(isURL && !validateURL(data)) {
-                    throw new FieldRestrictionError(`[ ${key} ] value should be a URL.`)
-                }
-
-                if(isMail && !validateMail(data)) {
-                    throw new FieldRestrictionError(`[ ${key} ] value should be an email.`)
-                }
-            }
-
-            /**** VALIDATE ARRAY LENGTH */
-            if (typeof data === "object" && Array.isArray(data)) {
-
-                if((arrayMaxLength && data.length > arrayMaxLength)) {
-                    throw new FieldRestrictionError(`[ ${key} ] array should have ${arrayMaxLength} max length.`)
-                }
-
-                else if((arrayMinLength && data.length < arrayMinLength)) {
-                    throw new FieldRestrictionError(`[ ${key} ] array should have ${ arrayMinLength } min length.`)
-                }
-
-                else { null }
-            }
-
-            /*** VALIDATE NUMBERS */
-            if(typeof data==="number") {
-                if((numberMin && data < numberMin)) {
-                    throw new FieldRestrictionError(`[ ${key} ] value shouldn't be less than ${numberMin}`)
-                } 
-                
-                else if((numberMax && data > numberMax)) {
-                    throw new FieldRestrictionError(`[ ${key} ] value shouldn't be more than ${numberMax}`)
-                } 
-
-                else if(gt && !(data > gt)) {
-                    throw new FieldRestrictionError(`[ ${key} ] value be strictly greater than ${gt}`)
-                }
-
-                else if(lt && !(data < lt)) {
-                    throw new FieldRestrictionError(`[ ${key} ] value be strictly lesser than ${lt}`)
-                }
-
-                else if (gte && !(data >= gte)) {
-                    throw new FieldRestrictionError(`[ ${key} ] value be strictly greater than or equal to ${gte}`)
-                }
-
-                else if (lte && !(data <= lte)) {
-                    throw new FieldRestrictionError(`[ ${key} ] value be strictly lesser than or equal to ${lte}`)
-                }               
-                
-                else { null }
-            }
-
-            return true;
-
-        })
-
-        return configValid;
-
-    }
+    #checkConfig = async (newData) => await checkFieldConfig({instance:this,newData}) 
 
     
     /**
@@ -515,7 +264,7 @@ export default class JORM {
      * @param {Function} cb
      * @param {boolean} raw
      * 
-     * @returns {string | object}
+     * @returns {Promise<object|string>}
      * 
      * Fetches all the records from the table [ Json File ].
      * If the [ raw ] option is set to true, then the Json data won't be parsed before being returned.
@@ -558,6 +307,8 @@ export default class JORM {
      * @param {string} options.lookup
      * @param {boolean} options.raw
      * 
+     * @returns {Promise<object|string> | null}
+     * 
      * Fetches a specific record from the table [ Json File ] based on a lookup field.
      * The default lookup field is the id. You can override this value in the definition.
      * If you specify a [ lookup ] options, then that field will be used.
@@ -571,7 +322,7 @@ export default class JORM {
             lookup : lookup || this.lookup 
         });
 
-        if(!foundRecord) return undefined
+        if(!foundRecord) return null
         if(raw) return Promise.resolve(JSON.string(foundRecord[0]))
 
         return Promise.resolve(foundRecord);
@@ -586,6 +337,8 @@ export default class JORM {
      * @param {object} data
      * @param {Function} cb
      * 
+     * @returns {Promise<Array>}
+     * 
      * Fetches all the data from a specific field.
      * 
      * If the [ withNulls ] option is set to false, then all the null values will be ignored in the return.
@@ -594,7 +347,6 @@ export default class JORM {
      * and the value as a property will be returned.
      * 
      * The user can filter records they want to receive information about.
-     * 
      * 
      */
     async fetchField (options,withNulls=true,data,cb) {
@@ -651,7 +403,7 @@ export default class JORM {
      * @param {object} data
      * @param {Function} cb
      * 
-     * @returns {Array}
+     * @returns {Promise<Array>}
      * 
      * Fetches all the data from a set of fields.
      * 
@@ -685,6 +437,8 @@ export default class JORM {
      * 
      * @param {Function} cb
      * @param {boolean} keepFile
+     * 
+     * @param {void}
      * 
      * Deletes all the records from the table.
      * If the [ keepFile ] option is set to false, 
@@ -726,7 +480,7 @@ export default class JORM {
      * @param {Function} cb
      * @param {string} lookup
      * 
-     * @returns {boolean}
+     * @returns {Promise<boolean>}
      * 
      * Deletes a specific record from the table [ Json File ] based on a lookup field.
      * The default lookup field is the id. You can override this value in the definition.
@@ -771,8 +525,6 @@ export default class JORM {
      * @param {string} field
      * @param {Array} data
      * @param {Function} cb
-     * 
-     * @param {Array}
      * 
      * @returns {void}
      * 
@@ -833,7 +585,7 @@ export default class JORM {
      * 
      * @param {object} data 
      * 
-     * @returns {object}
+     * @returns {Promise<object|Error>}
      * 
      * Creates a JORM record but don't save it into the table [ Json File ].
      * This record is returned with a computed primary key value up to date.
@@ -845,81 +597,82 @@ export default class JORM {
 
           /***** DON'T CHECK FOR COERCICION INSIDE OF THIS FUNCTION */
 
-          let typesOk = await this.#checkTypes(data);
-          let configOk = await this.#checkConfig(data);
-  
-            if(typesOk && configOk) {
-                
-                try {
-                    let fileContent = await readFile(this.resolveFilePath(),{encoding:this.encoding});
-    
-                    /**@type {Array} */
-                    const parsedFileContent = JSON.parse(fileContent || "[]");
-        
-                    /*** GET THE ID */
-        
-                    /**@type {object} */
-                    const lastRecord = parsedFileContent.at(-1);
-                    let lastId = lastRecord?.id;
-        
-                    let id;
-    
-                    if(lastId) {
-                        /*** There's no last id, that means there was no record in the file. */
-                        /*** If so, read the id from the file */
-                        id = lastId+1
-    
-                    } else {
-                        const parsedContent = await this.getFieldDiaryContent();
-                        let last_id = parsedContent.last_id || 0;
-                        id = last_id + 1;
-                    }    
-        
-                    /*** FORM THE NEW RECORD */
-                    const newRecord = {id,...data};
-    
-                    if(this.autoCreateDate) {
-                        newRecord.created_at = new Date();
-                    } 
-                              
-                   
-                    return {
-                        data : newRecord,
-                        save : async () => {
+        let typesOk = await this.#checkTypes(data);
+        let configOk = await this.#checkConfig(data);
 
-                            /*** WRITE THE NEW LAST_ID BACK TO THE FILE */
+        if(typesOk && configOk) {
+            
+            try {
+                let fileContent = await readFile(this.resolveFilePath(),{encoding:this.encoding});
 
-                            await writeFile(
-                                this.diaryFilePath,
-                                JSON.stringify({...this.getFieldDiaryContent(),last_id:id}
-                            ))
+                /**@type {Array} */
+                const parsedFileContent = JSON.parse(fileContent || "[]");
+    
+                /*** GET THE ID */
+    
+                /**@type {object} */
+                const lastRecord = parsedFileContent.at(-1);
+                let lastId = lastRecord?.id;
+    
+                let id;
 
-                            /*** SAVE THE RECORD TO THE DATABASE */
-                        
-                            const freshData = [...parsedFileContent,newRecord];
-                            await writeFile(this.resolveFilePath(),JSON.stringify(freshData),{encoding:this.encoding});
+                if(lastId) {
+                    /*** There's no last id, that means there was no record in the file. */
+                    /*** If so, read the id from the file */
+                    id = lastId+1
+
+                } else {
+                    const parsedContent = await this.getFieldDiaryContent();
+                    let last_id = parsedContent.last_id || 0;
+                    id = last_id + 1;
+                }    
+    
+                /*** FORM THE NEW RECORD */
+                const  builtRecord = await buildRecord(data,this.configFilePath);
+                const newRecord = {id,...builtRecord};  
+
+                if(this.autoCreateDate) {
+                    newRecord.created_at = new Date();
+                } 
                             
-                            return newRecord;
-                        }
-                    };
-    
-                } catch(e) {
-                    const error = new Error(e.message);
-                    error.stack = e.stack;
+                
+                return {
+                    data : newRecord,
+                    save : async () => {
 
-                    throw error;
-                }
-    
-            } else {
-                throw new ModelTypeError("Either type checks or configuration checks haven't been successfully concluded !")
+                        /*** WRITE THE NEW LAST_ID BACK TO THE FILE */
+
+                        await writeFile(
+                            this.diaryFilePath,
+                            JSON.stringify({...this.getFieldDiaryContent(),last_id:id}
+                        ))
+
+                        /*** SAVE THE RECORD TO THE DATABASE */
+                    
+                        const freshData = [...parsedFileContent,newRecord];
+                        await writeFile(this.resolveFilePath(),JSON.stringify(freshData),{encoding:this.encoding});
+                        
+                        return newRecord;
+                    }
+                };
+
+            } catch(e) {
+                const error = new Error(e.message);
+                error.stack = e.stack;
+
+                throw error;
             }
+
+        } else {
+            throw new ModelTypeError("Either type checks or configuration checks haven't been successfully concluded !")
+        }
     }
 
 
     /**
      * 
      * @param {object} data 
-     * @returns {Promise<object> | Error}
+     * @returns {Promise<object>|Error}
      * 
      * Creates a JORM record and directly saves it into the database [ Json File ].
      * 
@@ -968,7 +721,8 @@ export default class JORM {
 
     
                 /*** FORM THE NEW RECORD */
-                const newRecord = {id,...data};
+                const  builtRecord = await buildRecord(data,this.configFilePath);
+                const newRecord = {id,...builtRecord};
 
                 if(this.autoCreateDate) {
                     newRecord.created_at = new Date();
@@ -1005,7 +759,7 @@ export default class JORM {
      * @param {string} options.lookup
      * @param {object} newData
      * 
-     * @returns {undefined | object}
+     * @returns {Promise<object|undefined|FieldRestrictionError>}
      * 
      * Updates one record. 
      * It's advisable to use this function inside of a  [ .then() ] statement after calling 
@@ -1047,6 +801,8 @@ export default class JORM {
      * @param {Array} data 
      * @param {Function} cb
      * 
+     * @returns {Promise<Array>}
+     * 
      * Updates many records at the same time. Pass as an argument a list 
      * containing objects representing records to update.
      * Each object has a property [ id ] which is the id of the record to update
@@ -1086,7 +842,9 @@ export default class JORM {
             }
         })
 
-        await writeFile(this.resolveFilePath(),JSON.stringify(toUpdateData),{encoding:this.encoding})
+        await writeFile(this.resolveFilePath(),JSON.stringify(toUpdateData),{encoding:this.encoding});
+
+        return toUpdateData;
         
     }
 

@@ -1,5 +1,5 @@
 import {dirname,join} from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { BadFilePathError, ModelTypeError } from "./jorm-errors.mjs";
 import JORMFieldConstraint from "./jorm-field-constraints.mjs";
@@ -166,3 +166,37 @@ export const ENUMValuesAreSameType = ({ENUM,type}) => {
     return ENUM.every( value => typeof value === type.toLowerCase());
 }
 
+
+/**
+ * 
+ * @param {object} data 
+ * @param {string} configFilePath
+ * 
+ * @returns {object}
+ * 
+ */
+export const buildRecord = async (newData,configFilePath) => {
+
+    const fileContent = await readFile(configFilePath,{encoding:"binary"});
+
+    /**@type {object} */
+    const parsedFileContent = JSON.parse(fileContent || "{}");
+
+    const ndKeys = Object.keys(newData);
+
+    const toSaveData = {...newData};
+
+    ndKeys.forEach( async key => {
+
+        const data = newData[key];
+        const config = parsedFileContent[key];
+
+        let defaultValue = config?.defaultValue;
+
+        if(!data && defaultValue) toSaveData[key] = defaultValue;
+
+    })
+
+    return toSaveData;
+
+}

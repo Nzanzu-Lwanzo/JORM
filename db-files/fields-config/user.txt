@@ -1,0 +1,1 @@
+{"username":{"allowNull":false,"string":{"maxLength":16,"minLength":2},"unique":false},"bio":{"allowNull":true,"defaultValue":"I like JORM as it spares me the headache of configurating a database for small projects I just build for fun.","unique":false}}

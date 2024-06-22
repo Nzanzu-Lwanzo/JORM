@@ -190,6 +190,27 @@ export const lsRead = (lkpV) => {
 
 }
 
+/**
+ * 
+ * @param {undefined | number} lkpV 
+ */
+export const lsDelete = (lkpV) => {
+
+    if(!lkpV) window.localStorage.clear();
+
+    /**@type {Array} */
+    const allData = lsRead();
+    
+    const idx = allData.findIndex( data => data?.id === parseInt(lkpV));
+
+    if(idx === -1) return
+
+    allData.splice(idx,1);
+
+    window.localStorage.setItem("tasks",JSON.stringify(allData));
+
+}
+
 
 /**
  * @param {HTMLFormElement} form

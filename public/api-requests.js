@@ -8,7 +8,8 @@ import {
     getFormData,
     patchHandler,
     postHandler,
-    taskCount
+    taskCount,
+    lsDelete
 } from "./utilities.js";
 
 import {
@@ -69,6 +70,9 @@ deleteAll.addEventListener("click",function (e) {
                 taskContainer.innerHTML = "You have got no task ! Add some !";
                 taskCount(false,true);
 
+                /*** Empty the localStorage */
+                lsDelete();
+
             } else {
                 console.log(r)
             }
@@ -106,6 +110,9 @@ taskContainer.addEventListener("click",function(e) {
 
                     document.getElementById(id).remove();
                     taskCount(false);
+
+                    /** Delete this from record from the localStorage */
+                    lsDelete(id);
                     
                 } else {
                     console.log(r)

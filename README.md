@@ -15,10 +15,21 @@
 
 2. In your " package.json " file, inside of the scripts object, let the " migrate " command point to the file that creates your models. You could instantiate models in different files, import them in one file and execute this command to create their files at the same time.
 
+3. Files are not crypted, which is something we'll probably implement in the future. But, for the moment being, just keep in mind that data are not securely stored. Don't store authentication data like passwords or sensible data like credit cards numbers.
 
 <h1>TODO</h1>
 
-- Save the default value data if any was specified.
-- Protect jorm database related files by crypting them with a secret key or by any other mean.
-- Handle dates registering
 - Implement the possibility for users to submit data omitting no required fields (ex : If [ user ] has got two fieds [ username ] and [ age ]. The first one is required but not the second one. The user can only submit data with [ username ] value and omit the age one which will receive either the defaulValue either null.)
+- Support emojis
+- Implement associations (OneToOne, ManyToMany, OneToMany, ManyToOne)
+
+<h1>COMMIT CHANGES</h1>
+
+- Added validation using validator.js
+- Added date validation in the field-constraints constructor
+- Added possibility to save default data in case any was provided for no required fields.
+- In the mini app, I had created a model named [ User ] but that stored [ tasks ] instead. This error could have led to misundertanding issues. I fixed it.
+
+<h1>ISSUES</h1>
+
+- Can't handle errors in controllers. Maybe because errors are thrown from functions and methodes used inside of the method we actually call.
