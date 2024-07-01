@@ -12,9 +12,10 @@ const taskRouter = Router();
 
 /********** REGISTER ROUTE HANDLERS *********** */
 
-taskRouter.get("/:id/",fetchOne);
 
 taskRouter.get("/",fetchAll);
+
+taskRouter.get("/:id/",fetchOne);
 
 taskRouter.post("/",create);
 

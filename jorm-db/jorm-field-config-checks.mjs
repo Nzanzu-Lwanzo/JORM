@@ -11,8 +11,9 @@ import validator from "validator";
  * 
  * @returns {boolean | Error}
  */
-export default async function checkFieldConfig ({instance,newData}) {
-    const fileContent = await readFile(instance.configFilePath,{encoding:"binary"});
+export default async function checkFieldConfig ({instance,newData},isUpdate) {
+
+    const fileContent = await readFile(instance.configFilePath,{encoding:"utf-8"});
 
     /**@type {object} */
     const parsedFileContent = JSON.parse(fileContent || "{}");
@@ -20,50 +21,19 @@ export default async function checkFieldConfig ({instance,newData}) {
     const ndKeys = Object.keys(newData);
     const pfKeys = Object.keys(parsedFileContent);
 
-    let configValid = ndKeys.every( async key => {
+    let configValid = pfKeys.every( async key => {
 
         const data = newData[key];
         const config = parsedFileContent[key];
 
-        let allowNull = config?.allowNull;
-        let defaultValue = config?.defaultValue;
-        let unique = config?.unique;
-
-        /**** VALIDATE NON NULL VALUES */
-        if(!allowNull && (!data && !defaultValue)) {
-            throw new FieldRestrictionError(`You must provide a value for the ${key} field.`)
-        }
-
-        /*** VALIDATE UNIQUE VALUES */
-        if(unique) {
-
-            /**@type {Array} */
-            const allRecords = await instance.fetchAll();
-
-            /*** UNIQUE STRINGS */
-            if(typeof data === "string") {
-                let isDuplicate = allRecords.some( record => {
-                    
-                    /**@type {string} */
-                    let inDtbs = record[key];
-
-                    /**@type {string} */
-                    let inNew = newData[key];
-
-                    return inDtbs?.trim().toLowerCase() === inNew?.trim().toLowerCase();
-                })
-
-                if(isDuplicate) {
-                    throw new FieldRestrictionError(`[ ${key} ] value must be unique.`)
-                }
-            }
-
-            /*** UNIQUE ARRAYS */
-
-            if(typeof data === "object" && Array.isArray(data)) {
-                
-            }
-        }
+        if(!validateBoolsField({
+            data,
+            field : key,
+            config,
+            instance,
+            newData,
+            isUpdate
+        })) throw new FieldRestrictionError("NOT_FORECASTED_ERROR")
 
         if(!validateField({
             data,
@@ -217,7 +187,7 @@ export function validateField ({data,field,config}) {
     }
 
     /*** VALIDATES DATES */
-    if(validator.isDate(data)) {
+    if(validator.isDate(data || "")) {
 
         let dateIsAfter = config?.date?.isAfter;
         let dateIsBefore = config?.date?.isBefore;
@@ -236,4 +206,61 @@ export function validateField ({data,field,config}) {
 
     return true
 
+}
+
+
+/**
+ * 
+ * @param {object} options
+ * @param {any} options.data
+ * @param {string} options.field
+ * @param {object} options.config
+ * @param {JORM} options.instance
+ * @param {object} options.newData
+ * 
+ * @returns {boolean | FieldRestrictionError}
+ */
+export const validateBoolsField = async ({data,field,config,instance,newData,isUpdate=false}) => {
+
+    let allowNull = config?.allowNull;
+    let defaultValue = config?.defaultValue;
+    let unique = config?.unique;
+
+    /**** VALIDATE NON NULL VALUES */
+    if(!allowNull && (!data && !defaultValue)) {
+        throw new FieldRestrictionError(`You must provide a value for the ${field} field.`)
+    }
+
+    /*** VALIDATE UNIQUE VALUES */
+    if(unique && !isUpdate) {
+
+        /**@type {Array} */
+        const allRecords = await instance.fetchAll();
+
+        /*** UNIQUE STRINGS */
+        if(typeof data === "string") {
+            let isDuplicate = allRecords.some( record => {
+                
+                /**@type {string} */
+                let inDtbs = record[field];
+
+                /**@type {string} */
+                let inNew = newData[field];
+
+                return inDtbs?.trim().toLowerCase() === inNew?.trim().toLowerCase();
+            })
+
+            if(isDuplicate) {
+                throw new FieldRestrictionError(`[ ${field} ] value must be unique.`)
+            }
+        }
+
+        /*** UNIQUE ARRAYS */
+
+        if(typeof data === "object" && Array.isArray(data)) {
+            
+        }
+    }
+
+    return true;
 }

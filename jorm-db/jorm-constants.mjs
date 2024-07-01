@@ -6,5 +6,10 @@ export const TYPES_MAP = {
 }
 
 export const DIARY_CONFIG = {
-    last_id : 0
+    last_id : 0,
+    exist_ids : []
+}
+
+export const oneToOneOprions = {
+
 }

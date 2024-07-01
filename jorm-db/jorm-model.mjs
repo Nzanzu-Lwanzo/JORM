@@ -22,7 +22,8 @@ import {
     getConfig,
     createStorageDir,
     storeToDir,
-    buildRecord
+    buildRecord,
+    addAssociationField
 } from "./jorm-utils.mjs";
 
 import { DIARY_CONFIG } from "./jorm-constants.mjs";
@@ -32,6 +33,7 @@ import DataProcessor from "./jorm-data-processor.mjs";
 import checkFieldConfig from "./jorm-field-config-checks.mjs";
 
 import checkFieldType from "./jorm-field-types-checks.mjs";
+import validator from "validator";
 
 export default class JORM {
 
@@ -69,7 +71,7 @@ export default class JORM {
      * 
      * @param {object} shape 
      * 
-     * Store the types of this particular model [ table, Json File ] in a binary encoded [ .txt ] file.
+     * Store the types of this particular model [ table, Json File ] in a utf-8 encoded [ .txt ] file.
      */
     #storeTypes = async (shape) => {
 
@@ -104,7 +106,9 @@ export default class JORM {
      */
     #checkTypes = async (newData) => await checkFieldType({instance:this,newData})
 
-    #checkConfig = async (newData) => await checkFieldConfig({instance:this,newData}) 
+    #checkConfig = async (newData,isUpdate) => {
+        return await checkFieldConfig({instance:this,newData},isUpdate)
+    } 
 
     
     /**
@@ -122,6 +126,7 @@ export default class JORM {
      * @param {boolean} JORMConstructor.options.autoUpdateDate
      * @param {string} JORMConstructor.options.encoding
      * @param {boolean} JORMConstructor.options.plurify
+     * @param {boolean} JORMConstructor.options.eagerLoading
      */
     constructor ({
         model,
@@ -132,7 +137,8 @@ export default class JORM {
             autoCreateDate : true,
             autoUpdateDate : true,
             encoding : undefined,
-            plurify : true
+            plurify : true,
+            eagerLoading : false
         }
     }) {
 
@@ -144,8 +150,9 @@ export default class JORM {
         this.raw = options.raw;
         this.autoCreateDate = options.autoCreateDate;
         this.autoUpdateDate = options.autoUpdateDate;
-        this.encoding = options.encoding || "binary";
+        this.encoding = options.encoding || "utf-8";
         this.plurify = options.plurify
+        this.eagerLoading = options.eagerLoading
 
         this.pathIsFile = statSync(this.modelFilePath).isFile();
         
@@ -156,7 +163,7 @@ export default class JORM {
     }
 
     __name__() {
-        return this.modelName?.toUpperCase() || "no-model-name"
+        return this.modelName?.toLowerCase() || "no-model-name"
     }
 
 
@@ -252,7 +259,7 @@ export default class JORM {
             filePath = this.modelFilePath;
 
         } else {
-            filePath = join(this.modelFilePath,`${this.modelName}${this.plurify && "s"}.json`);
+            filePath = join(this.modelFilePath,`${this.modelName}${this.plurify ? "s" : ""}.json`);
         }
 
         return filePath;
@@ -262,6 +269,9 @@ export default class JORM {
     /**
      * 
      * @param {Function} cb
+     * @param {object} relation
+     * @param {boolean} relation.eager
+     * @param {[JORM]} relation.models
      * @param {boolean} raw
      * 
      * @returns {Promise<object|string>}
@@ -270,7 +280,13 @@ export default class JORM {
      * If the [ raw ] option is set to true, then the Json data won't be parsed before being returned.
      * 
      */
-    async fetchAll (cb,raw=this.raw) {
+    async fetchAll (
+        cb,
+        relation= {
+            eager : this.eagerLoading,
+            models : undefined
+        },
+        raw=this.raw) {
 
         if(!this.resolveFilePath()) throw new BadFilePathError("We couldn't find the path to you Json Database File.");
 
@@ -279,11 +295,68 @@ export default class JORM {
 
         if(raw) return new Promise.resolve(jsonData);
 
-        const parsedData = JSON.parse(jsonData || "[]");
+        /**@type {Array} */
+        let allRecords = cb ? cb(JSON.parse(jsonData || "[]")) : JSON.parse(jsonData || "[]");
 
-        if(cb) return cb(parsedData);
+        if(relation.eager && relation.models.length !== 0) {
 
-        return Promise.resolve(parsedData);
+            // Get all the ref field names
+            const refFieldNames = relation.models.map( model => {
+                return this.getRefFieldName(undefined,model);
+            })
+
+            // Get the data with
+            const dataByEagerLoading = allRecords.map( async record =>{
+
+                const dettachedRealtedData = relation.models.map( async model => {
+
+                    try {
+                        let refFieldName = this.getRefFieldName(undefined,model);
+                        
+                        const data = await model.fetchOne(record[refFieldName]);
+
+                        /*** The reference field that ends with _id */
+                        delete record[refFieldName];
+                        
+                        return {...record,[model.__name__()] : data};
+
+                    } catch(e) {
+                        if(e instanceof TypeError) {
+                            return record;
+                        }
+
+                        throw new e;
+                    }
+                })
+
+                const updatedRecord = await (await Promise.all(dettachedRealtedData)).reduce(
+                    /**
+                     * 
+                     * @param {object} prev 
+                     * @param {object} curr 
+                     * @param {number} idx 
+                     * @param {Array} array 
+                     * @returns 
+                     */
+                    (prev,curr,idx,array) => {
+                        Object.keys(curr).forEach( key => {
+                            if(refFieldNames.includes(key)) { delete curr[key] }
+                        })
+
+                        return {...prev,...curr}
+                    }
+                )
+
+                return updatedRecord;
+
+            })
+
+            return await Promise.all(dataByEagerLoading)
+
+        }
+
+        return allRecords;
+
 
     }
 
@@ -472,6 +545,14 @@ export default class JORM {
         
         /**** Just replace the content */
         await writeFile(this.resolveFilePath(),JSON.stringify(toWriteToFile),{encoding:this.encoding});
+
+        /*** Delete all the stored ids */
+        const parsedDiaryContent = await this.getFieldDiaryContent();
+        await writeFile(
+            this.diaryFilePath,
+            JSON.stringify({...parsedDiaryContent,exist_ids:[]}),
+            {encoding:this.encoding}
+        )
     }
 
 
@@ -508,7 +589,7 @@ export default class JORM {
         const deleted = allRecords.splice(idx,1);
         if(cb) {
             /**
-             * @param {object}
+             * @param {Array}
              * 
              * Receives an array containing the deleted records.
              */
@@ -516,6 +597,19 @@ export default class JORM {
         }
 
         await writeFile(this.resolveFilePath(),JSON.stringify(allRecords),{encoding:this.encoding});
+
+        /*** Delete the id of this deleted record from the ids store */
+        const parsedDiaryContent = await this.getFieldDiaryContent();
+
+        /**@type {Array} */
+        const exist_ids = parsedDiaryContent?.exist_ids;
+        let id_idx = exist_ids.findIndex( id => id === deleted[0]?.id );
+        exist_ids.splice(id_idx,1);
+        await writeFile(
+            this.diaryFilePath,
+            JSON.stringify({...parsedDiaryContent,exist_ids}),
+            {encoding:this.encoding}
+        )
 
         return true;
     }
@@ -583,7 +677,10 @@ export default class JORM {
 
     /**
      * 
-     * @param {object} data 
+     * @param {object} data  
+     * @param {object} mtm
+     * @param {JORM} mtm.model
+     * @param {number} mtm.tid
      * 
      * @returns {Promise<object|Error>}
      * 
@@ -593,7 +690,7 @@ export default class JORM {
      * By default, a [ create_date ] field is added to each table
      * unless the [ autoCreateDate ] constructor option is set to false.
      */
-    async record (data) {
+    async record (data,mtm={model:undefined,tid:undefined}) {
 
           /***** DON'T CHECK FOR COERCICION INSIDE OF THIS FUNCTION */
 
@@ -615,6 +712,7 @@ export default class JORM {
                 let lastId = lastRecord?.id;
     
                 let id;
+                const parsedDiaryContent = await this.getFieldDiaryContent();
 
                 if(lastId) {
                     /*** There's no last id, that means there was no record in the file. */
@@ -622,8 +720,7 @@ export default class JORM {
                     id = lastId+1
 
                 } else {
-                    const parsedContent = await this.getFieldDiaryContent();
-                    let last_id = parsedContent.last_id || 0;
+                    let last_id = parsedDiaryContent.last_id || 0;
                     id = last_id + 1;
                 }    
     
@@ -644,14 +741,36 @@ export default class JORM {
 
                         await writeFile(
                             this.diaryFilePath,
-                            JSON.stringify({...this.getFieldDiaryContent(),last_id:id}
+                            JSON.stringify({...parsedDiaryContent,last_id:id}
                         ))
 
                         /*** SAVE THE RECORD TO THE DATABASE */
                     
                         const freshData = [...parsedFileContent,newRecord];
                         await writeFile(this.resolveFilePath(),JSON.stringify(freshData),{encoding:this.encoding});
+
+                        /*** STORE THE ID OF THIS NEWLY CREATED DATA */
+
+                        /**@type {Array} */
+                        const exist_ids = parsedDiaryContent?.exist_ids || [];
+                        exist_ids.push(id)
+                        await writeFile(
+                            this.diaryFilePath,
+                            JSON.stringify({...parsedDiaryContent,exist_ids}),
+                            {encoding:this.encoding}
+                        )
                         
+                        /*** IF IT'S A MANY TO MANY RELATIONSHIP */
+
+                        if(mtm.model && mtm.tid) {
+
+                            await this.createMtm(mtm.model,{
+                                fid:newRecord.id,
+                                tid:mtm.tid
+                            })
+
+                        }
+
                         return newRecord;
                     }
                 };
@@ -671,7 +790,11 @@ export default class JORM {
 
     /**
      * 
-     * @param {object} data 
+     * @param {object} data   
+     * @param {object} mtm
+     * @param {JORM} mtm.model
+     * @param {number} mtm.tid
+     
      * @returns {Promise<object>|Error}
      * 
      * Creates a JORM record and directly saves it into the database [ Json File ].
@@ -679,7 +802,7 @@ export default class JORM {
      * By default, a [ create_date ] field is added to each table
      * unless the [ autoCreateDate ] constructor option is set to false.
      */
-    async create (data) {
+    async create (data,mtm={model:undefined,tid:undefined}) {
 
         /***** DON'T CHECK FOR COERCICION INSIDE OF THIS FUNCTION */
 
@@ -701,6 +824,7 @@ export default class JORM {
                 let lastId = lastRecord?.id;
     
                 let id;
+                const parsedDiaryContent = await this.getFieldDiaryContent();
 
                 if(lastId) {
                     /*** There's no last id, that means there was no record in the file. */
@@ -708,20 +832,19 @@ export default class JORM {
                     id = lastId+1
 
                 } else {
-                    const parsedContent = await this.getFieldDiaryContent();
-                    let last_id = parsedContent.last_id || 0;
+                    let last_id = parsedDiaryContent.last_id || 0;
                     id = last_id + 1;
                 }
 
                 /*** WRITE THE NEW LAST_ID BACK TO THE FILE */
                 await writeFile(
                     this.diaryFilePath,
-                    JSON.stringify({...this.getFieldDiaryContent(),last_id:id}
+                    JSON.stringify({...parsedDiaryContent,last_id:id}
                 ))
-
     
                 /*** FORM THE NEW RECORD */
                 const  builtRecord = await buildRecord(data,this.configFilePath);
+                
                 const newRecord = {id,...builtRecord};
 
                 if(this.autoCreateDate) {
@@ -737,7 +860,29 @@ export default class JORM {
     
                 /*** WRITE BACK TO THE FILE */
                 await writeFile(this.resolveFilePath(),JSON.stringify(freshData),{encoding:this.encoding});
-    
+
+                /*** STORE THE ID OF THIS NEWLY CREATED DATA */
+
+                /**@type {Array} */
+                const exist_ids = parsedDiaryContent?.exist_ids || [];
+                exist_ids.push(id)
+                await writeFile(
+                    this.diaryFilePath,
+                    JSON.stringify({...parsedDiaryContent,exist_ids}),
+                    {encoding:this.encoding}
+                )
+
+                
+                /*** IF IT'S A MANY TO MANY RELATIONSHIP */
+                if(mtm.model && mtm.tid) {
+
+                    await this.createMtm(mtm.model,{
+                        fid:newRecord.id,
+                        tid:mtm.tid
+                    })
+
+                }
+
                 return newRecord
 
             } catch(e) {
@@ -767,7 +912,7 @@ export default class JORM {
      */
     async updateOne ({lookupValue,lookup=this.lookup},newData) {
 
-        let ok = await this.#checkConfig(newData);
+        let ok = await this.#checkConfig(newData,true);
 
         if(!ok) throw new FieldRestrictionError("Some data don't respect the field constraints you specified when you created this model.")
 
@@ -775,6 +920,8 @@ export default class JORM {
 
         /**@type {object} */
         const updatedData = {...oldData,...newData};
+        
+        console.log(updatedData)
 
         /**@type {Array} */
         const allRecords = await this.fetchAll();
@@ -866,11 +1013,12 @@ export default class JORM {
 
     get diaryFilePath() {
         let fullPath = join(
-            this.modelFilePath,this.#configDir,`fields-diary.json`
+            this.modelFilePath,this.#configDir,`${this.modelName}-fields-diary.json`
         )
 
         return fullPath;
     }
+
 
     /**
      * 
@@ -922,4 +1070,457 @@ export default class JORM {
 
         return foundRecord;
     }
+
+    /**
+     * 
+     * @param {string} name 
+     * @param {JORM} model
+     * 
+     * @returns {string}
+     */
+    getRefFieldName (name,model) {
+
+        let field;
+
+        if(!name) return `${model.__name__().toLowerCase()}_id`;
+
+        if(!validator.contains(name,model.__name__(),{ignoreCase:true})) {
+            throw new FieldRestrictionError(`Your reference field name ( currently [ ${name} ] ) should contain [ ${model.__name__()} ]. Case insensitive.`)
+        }
+
+        if(!name.toLowerCase().endsWith("_id")) {
+
+            field = `${name}_id`.toLowerCase()
+
+        } else { field = name.toLowerCase() }
+
+        return field;
+
+    }
+
+    /**
+     * 
+     * @param {JORM} model 
+     */
+    createJunctionTable (model) {
+
+       
+
+    }
+
+    
+    /**
+     * 
+     * @param {string} with_model_name 
+     * 
+     * @returns {string}
+     * 
+     * Receives the name of the model with which this model is having an association.
+     */
+    getJunctionTablePath (with_model_name) {
+
+        const junctionTablePath = join(
+            this.modelFilePath,
+            `${this.getJunctionTableName(with_model_name)}.json`
+        ) 
+
+        return junctionTablePath;
+    }
+
+
+    /**
+     * 
+     * @param {string} with_model_name 
+     * @returns {string}
+     */
+    getJunctionTableName (with_model_name) {
+        return `/${this.__name__().toLowerCase()}s-${with_model_name.toLowerCase()}s`;
+    }
+
+    /**
+     * 
+     * @param {string} with_model_name 
+     * @returns {string}
+     */
+    getJunctionTableConfigFilePath (with_model_name) {
+
+        return join(
+            this.modelFilePath,
+            this.#configDir,
+            `${this.getJunctionTableName(with_model_name)}.txt`
+        )
+    }
+
+    /**
+     * 
+     * @param {string} with_model_name 
+     * @returns {string}
+     */
+    getJunctionTableTypesFilePath (with_model_name) {
+        return join(
+            this.modelFilePath,
+            this.#tsDir,
+            `${this.getJunctionTableName(with_model_name)}.txt`
+        )
+    }
+
+    /**
+     * 
+     * @param {[string]} models 
+     */
+    getJunctionTableDiaryFilePath(models) {
+        let fullPath = join(
+            this.modelFilePath,this.#configDir,`${models[0]}-${models[1]}-fields-diary.json`
+        )
+
+        return fullPath;
+    }
+
+    /**
+     * 
+     * @param {JORM} model 
+     * @returns {object}
+     */
+    async getJunctionTableDiaryContent(model) {
+
+        const junctionTableFilePath = this.getJunctionTableDiaryFilePath([
+            this.__name__(),
+            model.__name__()
+        ]);
+
+        const diaryFileContent = await readFile(junctionTableFilePath,{encoding : this.encoding})
+
+        const parsedDiaryContent = JSON.parse(diaryFileContent || "{}");
+
+        return parsedDiaryContent;
+    }
+
+
+    // ASSOCIATIONS
+
+
+
+    /**
+     * 
+     * @param {JORM} model 
+     * @param {object} options 
+     * 
+     * @param {object} options.fromModel
+     * 
+     * @param {string} options.fromModel.name
+     * @param {object} options.fromModel.on
+     * @param {string} options.fromModel.on._delete
+     * @param {string} options.fromModel.on._update
+     * @param {object} options.fromModel.fieldConstraints
+     * @param {boolean} options.fromModel.fieldConstraints.allowNull
+     * @param {any} options.fromModel.fieldConstraints.defaultValue
+     *  
+     * @param {object} options.toModel
+     * 
+     * @param {string} options.toModel.name
+     * @param {object} options.toModel.on
+     * @param {string} options.toModel.on._delete
+     * @param {string} options.toModel.on._update
+     * @param {object} options.toModel.fieldConstraints
+     * @param {boolean} options.toModel.fieldConstraints.allowNull
+     * @param {any} options.toModel.fieldConstraints.defaultValue
+     * 
+     * Establishes a one-to-one relationship between the two models
+     * by adding a reference field on the two tables. Only the id can be used.
+     * 
+     */
+    oneToOne(model,options={
+        fromModel : {
+            name : undefined,
+            on : {
+                _delete : undefined,
+                _update : undefined
+            },
+            fieldConstraints : {
+                allowNull : false,
+                defaultValue : undefined
+            }
+        },
+        toModel : {
+            name : undefined,
+            on : {
+                _delete : undefined,
+                _update : undefined
+            },
+            fieldConstraints : {
+                allowNull : true,
+                defaultValue : undefined
+            }
+        }
+    })  {
+
+        let from_model_field = options.fromModel.name;
+        let to_model_field = options.toModel.name;
+
+        // CREATE A FIELD ON THE TWO MODELS
+        addAssociationField({
+            configFilePath : this.configFilePath,
+            typesFilePath : this.typesFilePath,
+            name : this.getRefFieldName(from_model_field,model),
+            fieldConstraints : {...options.fromModel.fieldConstraints,unique:true}
+        })
+
+        addAssociationField({
+            configFilePath : model.configFilePath,
+            typesFilePath : model.typesFilePath,
+            name : this.getRefFieldName(to_model_field,this),
+            fieldConstraints : {...options.toModel.fieldConstraints,unique:true}
+        })
+
+        /**
+         * Unique is true on the association because in oneToOne relationships 
+         * one record of A should be associated to at most one record of B, 
+         * A and B being tables (models, Json Files).
+         * 
+         * Remove the spreading operator and the unique property at the end,
+         * if not the case.
+         * 
+         */
+
+        
+    }
+
+
+    
+    /**
+     * 
+     * @param {JORM} model 
+     * @param {object} options 
+     * @param {string} options.name
+     * 
+     * @param {object} options.on
+     * @param {string} options.on._delete
+     * @param {string} options.on._update
+     * 
+     * @param {object} options.fieldConstraints
+     * @param {boolean} options.fieldConstraints.allowNull
+     * @param {any} options.fieldConstraints.defaultValue
+     * 
+     * Establishes a one-to-many relationship between the two models
+     * by adding a reference field on the target table. Only the id can be used.
+     * 
+     */
+    async oneToMany (model,options={
+        name : undefined,
+        on : {
+            _delete : undefined,
+            _update : undefined
+        },
+        fieldConstraints : {
+            allowNull : true,
+            defaultValue : undefined
+        }
+    }) {
+
+        // CREATE A REFERENCE FIELD ON THE TARGET TABLE
+        await addAssociationField({
+            configFilePath : model.configFilePath,
+            typesFilePath : model.typesFilePath,
+            name : this.getRefFieldName(options.name,this),
+            fieldConstraints : {...options.fieldConstraints,unique:false}
+        })
+
+        /**
+         * Be given two tables : students and courses.
+         * If we want to establish a one-to-many relationship between them 
+         * such as one course can have many students attending, then the student_id
+         * on the courses tables can't have unique value.
+         */
+
+    } 
+
+
+    /**
+     * 
+     * @param {JORM} model 
+     * @param {object} through
+     * 
+     * @param {object} through.from_model_field
+     * @param {object} through.from_model_field.on
+     * @param {string} through.from_model_field.on._delete
+     * @param {string} through.from_model_field.on._update
+     * @param {object} through.from_model_field.fieldConstraints
+     * @param {boolean} through.from_model_field.fieldConstraints.allowNull
+     * @param {any} through.from_model_field.fieldConstraints.defaultValue
+     * @param {boolean} through.from_model_field.fieldConstraints.unique
+     * 
+     * 
+     * @param {object} through.to_model_field
+     * @param {object} through.to_model_field.on
+     * @param {string} through.to_model_field.on._delete
+     * @param {string} through.to_model_field.on._update
+     * @param {object} through.to_model_field.fieldConstraints
+     * @param {boolean} through.to_model_field.fieldConstraints.allowNull
+     * @param {any} through.to_model_field.fieldConstraints.defaultValue
+     * @param {boolean} through.to_model_field.fieldConstraints.unique
+     * 
+     * Establishes a many-to-many relationship between the two models
+     * by creating an junction table that contains three properties :
+     * a [ id ] primary key and two properties pointing to the two models id.
+     * 
+     */
+    async manyToMany(model,through = {
+        from_model_field : {
+            on : {
+                _delete : undefined,
+                _update : undefined
+            },
+            fieldConstraints : {
+                allowNull : true,
+                defaultValue : undefined,
+                unique : false
+            }
+        },
+
+        to_model_field : {
+            on : {
+                _delete : undefined,
+                _update : undefined
+            },
+            fieldConstraints : {
+                allowNull : true,
+                defaultValue : undefined,
+                unique : false
+            }
+        }
+    }) {
+
+        // CREATE THE JUNCTION TABLE [ Json File ]
+        await writeFile(
+            this.getJunctionTablePath(model.__name__()),
+            JSON.stringify([]),
+            {
+                encoding:this.encoding
+            }
+        );
+
+        // CREATE THE FILE THAT HOLDS THE FIELDS RESTRICTIONS AND TYPES
+
+        let config = {
+
+            [`${this.__name__()}_id`] : {
+                ... through.from_model_field?.fieldConstraints
+            },
+            [`${model.__name__()}_id`] : {
+                ... through.to_model_field?.fieldConstraints
+            }
+        }
+
+        let types = {
+            [`${this.__name__()}_id`] : "number",
+            [`${model.__name__()}_id`] : "number"
+        }
+
+        // CONFIG FILE
+        await writeFile(
+          this.getJunctionTableConfigFilePath(model.__name__()),
+          JSON.stringify(config),
+          {encoding:this.encoding}
+        )
+
+        // TYPES FILE
+        await writeFile(
+            this.getJunctionTableTypesFilePath(model.__name__()),
+            JSON.stringify(types),
+            {encoding:this.encoding}
+        )
+
+        // DIARY FILE 
+        await writeFile(
+            this.getJunctionTableDiaryFilePath([this.__name__(),model.__name__()]),
+            JSON.stringify(DIARY_CONFIG),
+            {encoding:this.encoding}
+        );
+        
+    }
+
+    /**
+     * 
+     * @param {JORM} model
+     * @param {object} options
+     * @param {number} options.fid 
+     * @param {number} options.tid 
+     */
+    async createMtm (model,{fid,tid}) {
+
+        if(
+            !isNaN(parseInt(fid)) && !isNaN(parseInt(tid))
+        ) throw new FieldRestrictionError("The ids must be numerical values.")
+        
+        try {
+
+            const mtmFileContent = await readFile(
+                this.getJunctionTablePath(model.__name__()),
+                {encoding : this.encoding}
+            )
+
+            /**@type {Array} */
+            const allMtmRecords = JSON.parse(mtmFileContent || "[]");
+            
+            /*** GET THE ID */
+
+            /**@type {object} */
+            const lastRecord = allMtmRecords.at(-1);
+            let lastId = lastRecord?.id;
+
+            let id;
+            const parsedDiaryContent = await this.getJunctionTableDiaryContent(model);
+
+            if(lastId) {
+                /*** There's no last id, that means there was no record in the file. */
+                /*** If so, read the id from the file */
+                id = lastId+1
+
+            } else {
+                
+                let last_id = parsedDiaryContent.last_id || 0;
+                id = last_id + 1;
+
+            }
+
+            /*** WRITE THE NEW LAST_ID BACK TO THE FILE */
+            await writeFile(
+                this.getJunctionTableDiaryFilePath([
+                    this.__name__(),
+                    model.__name__()
+                ]),
+                JSON.stringify({...parsedDiaryContent,last_id:id}
+            ))
+
+
+            /*** FORM THE NEW RECORD */
+            const  builtRecord = {
+                [this.getRefFieldName(undefined,this)] : parseInt(fid),
+                [this.getRefFieldName(undefined,model)] : parseInt(tid)
+            };
+
+            const newRecord = {id,...builtRecord};
+
+            /*** RECONSTITUTE THE OBJECT */
+            const freshData = [...allMtmRecords,newRecord];
+
+            /*** WRITE BACK TO THE FILE */
+            await writeFile(
+                this.getJunctionTablePath(),
+                JSON.stringify(freshData),
+                {encoding:this.encoding}
+            );
+
+            return newRecord
+
+        } catch(e) {
+           const error = new Error(e.message);
+           error.stack = e.stack;
+
+           throw error;
+        }
+
+    }
+
+
 }

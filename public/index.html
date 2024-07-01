@@ -9,7 +9,8 @@
     <script src="./elements.js" type="module" defer></script>
     <script  src="./utilities.js" type="module" defer></script>
     <script src="./script.js" type="module" defer></script>
-    <script src="./api-requests.js" type="module" defer></script>
+    <script src="./api-tasks-requests.js" type="module" defer></script>
+    <script src="./api-users-requests.js" type="module" defer></script>
 </head>
 <body>
 
@@ -33,13 +34,24 @@
                 <li>
                     <span id="task-counter">0</span>
                 </li>
+
+                <li>
+                    <button class="no-bg" id="change-user">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-log-in"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+                    </button>
+                </li>
+
+                <li>
+                    <button id="show-all-users">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-user"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </button>
+                </li>
             </ul>
         </div>
 
         <div class="content">
            
         </div>
-
 
         <form action="#" id="form" class="form">
             <div>
@@ -54,12 +66,25 @@
             <input type="date" name="date">
             <button type="submit" id="submit">New Task</button>
         </form>
+
+
+        <div class="all-users" id="all-users">
+            <div>
+                <button class="hide">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+
+            <ul>
+                
+            </ul>
+        </div>
     </div>
 
 
-    <form action="#" class="update-form" id="update-form">
+    <form action="#" class="all-screen-form update-form" id="update-form">
         <div>
-            <button id="hide-update-form">
+            <button class="hide-all-screen-form" id="hide-update-form">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
         </div>
@@ -70,6 +95,21 @@
             <textarea name="description" placeholder="Task description ..."></textarea>
             <input type="date" name="date">
             <button type="submit" id="updater">Update</button>
+        </div>
+    </form>
+
+    <form action="#" class="all-screen-form user-form" id="user-form">
+        <div>
+            <button class="hide-all-screen-form" id="hide-user-form">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+
+        <div class="inputs">
+            <h2>Create</h2>
+            <input type="text" name="username" placeholder="User name ...">
+            <textarea name="bio" placeholder="User bio ..."></textarea>
+            <button type="submit" id="user-form-btn">Send</button>
         </div>
     </form>
     

@@ -1,8 +1,9 @@
 import {dirname,join} from "node:path";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { BadFilePathError, ModelTypeError } from "./jorm-errors.mjs";
+import { BadFilePathError, FieldRestrictionError, ModelTypeError } from "./jorm-errors.mjs";
 import JORMFieldConstraint from "./jorm-field-constraints.mjs";
+import validator from "validator";
 
 /**
  * 
@@ -90,11 +91,15 @@ export const createStorageDir = async ({modelFilePath,toCreateDirName,pathIsFile
 
     /**** Create a folder if it doesn't exist */
     if(pathIsFile) {
+
         /**** Extract the dirname and create a folder inside of it */
         let modelFileDir = dirname(modelFilePath);
         dir = join(modelFileDir,toCreateDirName);
+
     } else {
+
         dir = join(modelFilePath,toCreateDirName)
+        
     }
 
     /**** If the directory doesn't exist, create it */
@@ -121,21 +126,13 @@ export const storeToDir = async ({fullDir,modelName,what,data}) => {
         
         let filePath = join(fullDir,`${modelName}.txt`);
 
-        await writeFile(filePath,JSON.stringify(data),{encoding:"binary"});
+        await writeFile(filePath,JSON.stringify(data),{encoding:"utf-8"});
 
         return filePath;
 
     } else {
         throw new BadFilePathError(`We couldn't resolve the path to your ${what} storage directory. This directory is relatively deduced from the [ Json File ] path you provide for your model.`)
     }
-}
-
-export const validateMail = () => {
-
-}
-
-export const validateURL = () => {
-    
 }
 
 /**
@@ -177,26 +174,111 @@ export const ENUMValuesAreSameType = ({ENUM,type}) => {
  */
 export const buildRecord = async (newData,configFilePath) => {
 
-    const fileContent = await readFile(configFilePath,{encoding:"binary"});
+    const fileContent = await readFile(configFilePath,{encoding:"utf-8"});
 
     /**@type {object} */
     const parsedFileContent = JSON.parse(fileContent || "{}");
 
-    const ndKeys = Object.keys(newData);
+    const pfKeys = Object.keys(parsedFileContent);
 
     const toSaveData = {...newData};
 
-    ndKeys.forEach( async key => {
+    pfKeys.forEach( async key => {
 
         const data = newData[key];
         const config = parsedFileContent[key];
 
         let defaultValue = config?.defaultValue;
 
-        if(!data && defaultValue) toSaveData[key] = defaultValue;
+        if(!data && defaultValue) {
+            toSaveData[key] = defaultValue;
+        } 
 
     })
 
     return toSaveData;
 
 }
+
+
+export const getNotRequiredFields = () => {
+
+}
+
+/**
+ * 
+ * @param {object} options
+ * @param {string} options.configFilePath
+ * @param {string} options.typesFilePath
+ * @param {string} options.name
+ * @param {JORMFieldConstraint} options.fieldConstraints
+ */
+export const addAssociationField = async ({
+    configFilePath,
+    typesFilePath,
+    name,
+    fieldConstraints
+}) => {
+
+    const configFileContent = await readFile(configFilePath,{encoding:"utf-8"});
+    const typesFileContent = await readFile(typesFilePath,{encoding:"utf-8"});
+
+    const parsedConfig = JSON.parse(configFileContent || "{}");
+    const parsedTypes = JSON.parse(typesFileContent || "{}");
+
+    /** The foreign key will always be the id, which is a number */
+    const updatedConfig = {
+        ...parsedConfig,
+        [name] : {
+            allowNull : fieldConstraints.allowNull,
+            defaultValue : fieldConstraints.defaultValue,
+            unique : fieldConstraints.unique
+        }
+    }
+
+    /** The foreign key will always be the id, which is a number */
+    const updatedTypes = {
+        ...parsedTypes,
+        [name] : "number"
+    }
+
+    /*** Write back the config and the types */
+    await writeFile(configFilePath,JSON.stringify(updatedConfig),{encoding:"utf-8"});
+    await writeFile(typesFilePath,JSON.stringify(updatedTypes),{encoding:"utf-8"});
+
+}
+
+
+export const fecthEager = () => {
+     // Get the ref field name (string)
+            const refFieldName = Object.keys(parsedFileContent).find( key => {
+                let endsWithId = key.toLowerCase().endsWith("_id");
+                let containsRefModelName = validator.contains(key,relation.model.__name__(),{ignoreCase:true});
+
+                return endsWithId && containsRefModelName;
+
+            })
+
+         
+            if(refFieldName) {
+
+                const dataByEagerLoading = allRecords.map( async record => {
+
+                    const relatedData = await relation.model.fetchOne(record[refFieldName]);
+
+                    /*** The reference field that ends with _id */
+                    delete record[refFieldName];
+                    
+                    return {...record,[relation.model.__name__()] : relatedData};
+                    
+                })
+
+
+                return Promise.all(dataByEagerLoading);
+
+            } else {
+
+                return allRecords;
+
+            }
+} 

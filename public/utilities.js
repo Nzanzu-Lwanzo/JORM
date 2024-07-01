@@ -39,7 +39,7 @@ export async function query (url) {
  * @param {method} url
  * @param {object} data
  * 
- * @returns {Error | Promise<object>}
+ * @returns {Promise<object>}
  * 
  * [ POST, DELETE, PATCH ]
  */
@@ -83,7 +83,7 @@ export function buildTaskCardContent (data) {
             <button data-id="${data.id}" class="delete-one">
             DELETE
             </button>
-            <button data-id="${data.id}" class="update-one">
+            <button data-id="${data.id}" class="update-form">
             EDIT
             </button>
         </div>
@@ -241,8 +241,6 @@ export const getFormData = (form) => {
         description: DATA.get("description"),
     }
 
-    console.log()
-
     return data;
 } 
 
@@ -257,7 +255,7 @@ export const postHandler = (e) => {
     submitBtn.innerHTML = loader;
 
     mutation(
-        "http://localhost:3000/api/jorm/",
+        "http://localhost:3000/api/jorm/task/",
         "POST",
         data
     )
@@ -296,7 +294,7 @@ export const patchHandler = (e,id) => {
 
     updateSubmitBtn.innerHTML = loader;
    
-    fetch(`http://localhost:3000/api/jorm/${id}/`,{
+    fetch(`http://localhost:3000/api/jorm/task/${id}/`,{
         method : "PATCH",
         body : JSON.stringify(data),
         headers : {
@@ -305,11 +303,13 @@ export const patchHandler = (e,id) => {
     })
         .then( r => {
             if(r?.ok) {
-                updateForm.classList.remove("update-form-shown");
+                updateForm.classList.remove("all-screen-form-shown");
                 updateForm.reset();
 
                 r.json()
                     .then( task => {
+
+                        console.log(task)
 
                         /*** Replace the old card by the updated one */
                         document.getElementById(id)
@@ -352,4 +352,13 @@ export const taskCount = (increment=true,reset=false) => {
 
     taskCounter.innerHTML = n;
 
+}
+
+/**
+ * 
+ * @param {object} user 
+ * @returns {string}
+ */
+export const buildUser = (user) => {
+    return `<li>${user.username}</li>`
 }

@@ -1,3 +1,4 @@
+import User from "../users/model.mjs";
 import Task from "./model.mjs";
 
 
@@ -18,7 +19,8 @@ export const create = async (request,response) => {
 
         response.status(400).json({
             name : e.name,
-            message : e.message
+            message : e.message,
+            stack : e.stack
         })
 
     }
@@ -34,7 +36,7 @@ export const fetchAll = async (request,response) => {
 
     try {
 
-        response.json(await Task.fetchAll(
+        const data = await Task.fetchAll(
 
             /**@param {Array} allRecords */
             (allRecords) => {
@@ -52,9 +54,18 @@ export const fetchAll = async (request,response) => {
                 })
             
     
-        },false)) 
+        },{
+
+            eager : true,
+            models : [User]
+
+        })
+
+        response.json(await data) 
 
     } catch(e)  {
+
+        console.log(e)
 
         response.status(400).json({
             name : e.name,
@@ -150,10 +161,13 @@ export const deleteOne = async (request,response) => {
         response.sendStatus(204);
 
     } catch(e) {
+        
+        console.log(e.stack)
 
         response.status(400).json({
             name : e.name,
-            message : e.message
+            message : e.message,
+            stack : e.stack
         })
 
     }

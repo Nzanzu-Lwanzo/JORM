@@ -3,50 +3,41 @@ import {join, dirname} from "node:path";
 import { fileURLToPath } from "node:url";
 import JORMFieldConstraint from "../../jorm-db/jorm-field-constraints.mjs";
 
-
 const db = join(
     dirname(fileURLToPath(import.meta.url)),
     "../../db-files"
 )
 
-const Task = new JORM({
+const Category = new JORM({
     model : {
         modelFilePath : db,
-        modelName : "task",
+        modelName : "categ",
         modelShape : {
             name : {
                 type : "string",
                 config : new JORMFieldConstraint({
                     allowNull : false,
                     unique : true,
-                    string : { maxLength : 50 },
+                    string : {
+                        maxLength : 10
+                    }
                 })
             },
-            description : {
+            color : {
                 type : "string",
                 config : new JORMFieldConstraint({
-                    allowNull : true,
-                    defaultValue : "There's no description for this task !",
-                })
-            },
-            date : {
-                type : "string",
-                config : new JORMFieldConstraint({
-                    allowNull : true,
-                    defaultValue : new Date().toISOString(),
-                    date : {
-                        isAfter : new Date()
+                    allowNull : false,
+                    unique : true,
+                    string : {
+                        maxLength : 7
                     }
                 })
             }
         }
     },
     options : {
-        autoCreateDate: true,
-        autoUpdateDate : true,
-        coercicion : true,
-        plurify : true
+        eagerLoading : true
     }
 })
 
-export default Task;
+export default Category;

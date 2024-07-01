@@ -25,7 +25,7 @@ import {
 } from "./elements.js";
 
 // GET ALL
-query("http://localhost:3000/api/jorm/")
+query("http://localhost:3000/api/jorm/task/")
     .then(
         /**@param {Array} data */
         (data) => {
@@ -58,7 +58,7 @@ deleteAll.addEventListener("click",function (e) {
 
     this.innerHTML = loader;
 
-    fetch("http://localhost:3000/api/jorm/",{
+    fetch("http://localhost:3000/api/jorm/task/",{
         method:"DELETE",
         headers : {
             "Content-Type":"application/json"
@@ -99,7 +99,7 @@ taskContainer.addEventListener("click",function(e) {
 
         element.innerHTML = loader;
 
-        fetch(`http://localhost:3000/api/jorm/${id}/`,{
+        fetch(`http://localhost:3000/api/jorm/task/${id}/`,{
             method : "DELETE",
             headers : {
                 "Content-Type" : "application/json"
@@ -132,7 +132,7 @@ taskContainer.addEventListener("click",function(e) {
     e.preventDefault();
     e.stopPropagation();
 
-    if(e.target.matches(".update-one")) {
+    if(e.target.matches(".update-form")) {
 
         /**@type {HTMLElement} */
         const element = e.target;
@@ -145,7 +145,7 @@ taskContainer.addEventListener("click",function(e) {
         populateForm(updateForm,task);
 
         /*** Show the form */
-        updateForm.classList.add("update-form-shown");
+        updateForm.classList.add("all-screen-form-shown");
     }
 
 })
@@ -162,5 +162,5 @@ updateForm?.addEventListener("submit",function(e) {
 
 hideUpdateFormBtn.addEventListener("click",(e) => {
     e.preventDefault();
-    updateForm.classList.remove("update-form-shown");
+    updateForm.classList.remove("all-screen-form-shown");
 })

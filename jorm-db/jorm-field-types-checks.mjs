@@ -13,7 +13,7 @@ import { gotSameProperties } from "./jorm-utils.mjs";
  * @returns {boolean | Error}
  */
 export default async function checkFieldType ({instance,newData}) {
-    const fileContent = await readFile(instance.typesFilePath,{encoding:"binary"});
+    const fileContent = await readFile(instance.typesFilePath,{encoding:"utf-8"});
 
     /**@type {object} */
     const parsedFileContent = JSON.parse(fileContent || "{}");
@@ -31,9 +31,16 @@ export default async function checkFieldType ({instance,newData}) {
     // Perform some checks only if [ instance.coercicion ] option is set to true
     if(instance.coercicion) {
 
-        // Chech if the properties (keys) list have got the same length ***********
+        /** Check if no additionnal properties than those specified
+         *  when creating the model were sent  
+         * */
 
-        if((ndKeys.length !== pfKeys.length)) {
+        let additionnalFieldExists = ndKeys.some( key => {
+            !pfKeys.map( key => key.toLowerCase())
+            .includes(key.toLowerCase())
+        })
+
+        if(additionnalFieldExists) {
             const error = new ModelTypeError("You provided more or less properties in instance new record than you specified when creating the table [ Json File ].");
 
             throw error;

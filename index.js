@@ -6,6 +6,8 @@
 import dotenv from "dotenv";
 import express from "express";
 import taskRouter from "./test-app/tasks/router.mjs";
+import userRouter from "./test-app/users/router.mjs";
+
 dotenv.config();
 
 
@@ -52,7 +54,8 @@ app.use(
 
 
 })
-app.use("/api/jorm",taskRouter);
+app.use("/api/jorm/task/",taskRouter);
+app.use("/api/jorm/user/",userRouter);
 
 
 /*************************************
